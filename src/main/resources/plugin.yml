@@ -1,0 +1,11 @@
+name: AsgHolos
+version: '1'
+main: ahjd.asgHolos.AsgHolos
+api-version: '1.21'
+authors: [ ahjd ]
+commands:
+  hologram:
+    aliases:
+      - holo
+      - holos
+      - holograms
