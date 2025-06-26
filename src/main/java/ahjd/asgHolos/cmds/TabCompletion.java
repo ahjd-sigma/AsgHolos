@@ -11,7 +11,7 @@ public class TabCompletion implements TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         List<String> completions = new ArrayList();
         if (args.length == 1) {
-            List<String> options = List.of("create", "list");
+            List<String> options = List.of("create", "list", "limit");
             Iterator var8 = options.iterator();
 
             while(var8.hasNext()) {

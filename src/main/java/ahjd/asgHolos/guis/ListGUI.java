@@ -149,17 +149,24 @@ public class ListGUI implements InventoryHolder {
         ItemStack item = new ItemStack(Material.NAME_TAG);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            String displayName = this.showingTemporary ? "§e" + data.text() + " §7(Temp)" : "§a" + data.text();
+            // Use hologram name if available, otherwise use text
+            String hologramName = data.name() != null && !data.name().isEmpty() ? data.name() : "Unnamed Hologram";
+            String displayName = this.showingTemporary ? "§e" + hologramName + " §7(Temp)" : "§a" + hologramName;
             meta.setDisplayName(displayName);
             meta.addItemFlags(new ItemFlag[]{ItemFlag.HIDE_ADDITIONAL_TOOLTIP});
+            
             List<String> lore = new ArrayList();
+            
+            // Add hologram text in lore
+            String displayText = data.text().length() > 30 ? data.text().substring(0, 30) + "..." : data.text();
+            lore.add("§7Text: §f" + displayText);
             lore.add("§7World: §f" + data.location().getWorld().getName());
-            lore.add("§7X: " + data.location().getBlockX());
-            lore.add("§7Y: " + data.location().getBlockY());
-            lore.add("§7Z: " + data.location().getBlockZ());
-            lore.add("§8Left-click: Teleport");
-            lore.add("§8Right-click: Delete");
+            lore.add("");
+            lore.add("§8▶ Left-click: Teleport");
+            lore.add("§8▶ Right-click: Delete");
+            
             if (this.showingTemporary) {
+                lore.add("");
                 lore.add("§c§oTemporary - Not saved to file");
             }
 

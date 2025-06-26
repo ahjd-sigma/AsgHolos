@@ -6,7 +6,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class Config {
     private final JavaPlugin plugin;
     private FileConfiguration config;
-    private Integer maxHolograms;
+    private Integer maxTempHolograms;
+    private Integer maxPersistentHolograms;
     private int maintenanceInterval;
 
     public Config(JavaPlugin plugin) {
@@ -21,13 +22,21 @@ public class Config {
     }
 
     private void loadConfig() {
-        Object rawMaxHolograms = this.config.get("max_holograms");
-        this.maxHolograms = rawMaxHolograms instanceof Integer ? (Integer)rawMaxHolograms : null;
+        Object rawMaxTempHolograms = this.config.get("max_temp_holograms");
+        this.maxTempHolograms = rawMaxTempHolograms instanceof Integer ? (Integer)rawMaxTempHolograms : null;
+        
+        Object rawMaxPersistentHolograms = this.config.get("max_persistent_holograms");
+        this.maxPersistentHolograms = rawMaxPersistentHolograms instanceof Integer ? (Integer)rawMaxPersistentHolograms : null;
+        
         this.maintenanceInterval = this.config.getInt("maintenance_interval", 60);
     }
 
-    public int getMaxHolograms() {
-        return this.maxHolograms;
+    public Integer getMaxTempHolograms() {
+        return this.maxTempHolograms;
+    }
+    
+    public Integer getMaxPersistentHolograms() {
+        return this.maxPersistentHolograms;
     }
 
     public int getMaintenanceInterval() {

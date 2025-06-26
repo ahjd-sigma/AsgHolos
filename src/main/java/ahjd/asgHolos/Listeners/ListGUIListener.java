@@ -77,7 +77,7 @@ public class ListGUIListener implements Listener {
                                     player.sendMessage(slabel + String.valueOf(ChatColor.RED) + "Hologram world not found!");
                                 }
                             } else if (event.getClick() == ClickType.RIGHT) {
-                                boolean deleted = this.hologramManager.deleteHologram(target);
+                                boolean deleted = this.hologramManager.deleteHologram(target, player, ahjd.asgHolos.api.events.HologramDeleteEvent.DeletionSource.PLAYER_GUI);
                                 if (deleted) {
                                     (new ListGUI(saveFile, this.hologramManager, currentPage, isShowingTemp)).open(player);
                                     holoType = isShowingTemp ? "temporary hologram" : "hologram";

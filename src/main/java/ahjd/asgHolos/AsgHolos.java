@@ -2,6 +2,8 @@ package ahjd.asgHolos;
 
 import ahjd.asgHolos.Listeners.CreationGUIListener;
 import ahjd.asgHolos.Listeners.ListGUIListener;
+import ahjd.asgHolos.api.AsgHolosAPI;
+import ahjd.asgHolos.api.AsgHolosAPIImpl;
 import ahjd.asgHolos.cmds.HoloCMD;
 import ahjd.asgHolos.cmds.TabCompletion;
 import ahjd.asgHolos.data.Config;
@@ -16,6 +18,7 @@ public final class AsgHolos extends JavaPlugin {
     private SaveFile saveFile;
     private HologramManager hologramManager;
     private HologramMaintenanceTask maintenanceTask;
+    private AsgHolosAPI api;
     public Config config;
 
     public void onEnable() {
@@ -24,6 +27,10 @@ public final class AsgHolos extends JavaPlugin {
         this.saveFile = new SaveFile(this);
         this.hologramManager = new HologramManager(this.saveFile, this);
         this.maintenanceTask = new HologramMaintenanceTask(this, this.hologramManager, this.config.getMaintenanceInterval());
+        
+        // Initialize API
+        this.api = new AsgHolosAPIImpl(this.hologramManager, this.config, this.saveFile, this);
+        
         ChatInput.initialize(this);
         this.hologramManager.setMaintenanceTask(this.maintenanceTask);
         this.hologramManager.populateCache();
@@ -35,6 +42,7 @@ public final class AsgHolos extends JavaPlugin {
         this.getCommand("hologram").setTabCompleter(new TabCompletion());
         this.maintenanceTask.start();
         this.getLogger().info("AsgHolos enabled successfully!");
+        this.getLogger().info("AsgHolos API is now available for external plugins!");
     }
 
     public static AsgHolos getInstance() {
@@ -48,6 +56,14 @@ public final class AsgHolos extends JavaPlugin {
     public Config getPluginConfig() {
         return this.config;
     }
+    
+    /**
+     * Gets the AsgHolos API for external plugin integration
+     * @return The AsgHolos API instance
+     */
+    public AsgHolosAPI getAPI() {
+        return this.api;
+    }
 
     public void onDisable() {
         if (this.maintenanceTask != null) {
@@ -59,6 +75,16 @@ public final class AsgHolos extends JavaPlugin {
         }
 
         if (this.hologramManager != null) {
+            // Log current hologram counts before shutdown
+            this.getLogger().info("Current hologram counts before shutdown - Temporary: " + 
+                               this.hologramManager.getActiveTempHolograms() + 
+                               ", Persistent: " + this.hologramManager.getActivePersistentHolograms());
+            
+            // Clean up temporary holograms to prevent ghost holograms on restart
+            this.getLogger().info("Cleaning up temporary holograms before shutdown...");
+            this.hologramManager.cleanupTemporaryHolograms();
+            
+            // Clear entity cache
             this.hologramManager.getEntityCache().clear();
         }
 

@@ -159,6 +159,12 @@ public class CreationGUIListener implements Listener {
     private void handlePersistenceToggle(InventoryClickEvent e, CreationGUIListener.HologramSettings settings) {
         settings.persistence = !settings.persistence;
         this.updateSimpleLore(e.getInventory().getItem(11), "Current State:", settings.persistence ? String.valueOf(ChatColor.GREEN) + "Persistent" : String.valueOf(ChatColor.YELLOW) + "Temporary");
+        
+        // Update the create button to reflect the new limit status
+        if (e.getInventory().getHolder() instanceof CreationGUI) {
+            CreationGUI gui = (CreationGUI) e.getInventory().getHolder();
+            gui.updateCreateButton(false);
+        }
     }
 
     private void handleBillboardCycle(InventoryClickEvent e, CreationGUIListener.HologramSettings settings) {
@@ -271,7 +277,7 @@ public class CreationGUIListener implements Listener {
         player.closeInventory();
         Location loc = player.getLocation().clone().add(0.0D, 2.0D, 0.0D);
         HologramData holo = new HologramData(loc, settings.text, settings.name, settings.persistence, settings.shadowed, settings.seeThrough, settings.billboard, settings.yaw, settings.pitch, settings.scale, settings.textAlignment, settings.textOpacity, settings.backgroundColor, settings.viewDistance, (UUID)null);
-        HologramData savedHolo = this.hologramManager.spawnHologram(holo);
+        HologramData savedHolo = this.hologramManager.spawnHologram(holo, player, ahjd.asgHolos.api.events.HologramCreateEvent.CreationSource.PLAYER_GUI);
         this.playerSettings.remove(playerId);
         String message = savedHolo != null ? String.valueOf(ChatColor.GREEN) + "Hologram created at your location!" : String.valueOf(ChatColor.RED) + "Failed to create hologram.";
         player.sendMessage(this.prefix + message);

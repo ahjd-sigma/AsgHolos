@@ -32,6 +32,7 @@ public class HoloCMD implements CommandExecutor {
                 player.sendMessage(slabel + String.valueOf(ChatColor.GOLD) + "=== " + String.valueOf(ChatColor.BOLD) + "AsgHolos Commands" + String.valueOf(ChatColor.GOLD) + " ===");
                 player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "/hologram create" + String.valueOf(ChatColor.GRAY) + " - Open hologram creation GUI");
                 player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "/hologram list" + String.valueOf(ChatColor.GRAY) + " - Open the hologram list GUI");
+                player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "/hologram limit" + String.valueOf(ChatColor.GRAY) + " - Show current hologram limit status");
                 player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "/hologram help" + String.valueOf(ChatColor.GRAY) + " - Show this help message");
                 return true;
             } else {
@@ -78,11 +79,20 @@ public class HoloCMD implements CommandExecutor {
                         player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "/hologram help" + String.valueOf(ChatColor.GRAY) + " - Show this help message");
                         break;
                     case 3:
-                        int currentHolograms = this.hologramManager.getActiveHolograms();
-                        Integer maxHolograms = this.config.getMaxHolograms();
-                        String limitStatus = maxHolograms == null ? "Unlimited" : maxHolograms + " holograms";
-                        player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "Current holograms: " + currentHolograms);
-                        player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "Maximum allowed: " + limitStatus);
+                        int currentTemp = this.hologramManager.getActiveTempHolograms();
+                        int currentPersistent = this.hologramManager.getActivePersistentHolograms();
+                        int totalHolograms = currentTemp + currentPersistent;
+                        
+                        Integer maxTemp = this.config.getMaxTempHolograms();
+                        Integer maxPersistent = this.config.getMaxPersistentHolograms();
+                        
+                        String tempLimitStatus = maxTemp == null ? "Unlimited" : maxTemp + " holograms";
+                        String persistentLimitStatus = maxPersistent == null ? "Unlimited" : maxPersistent + " holograms";
+                        
+                        player.sendMessage(slabel + String.valueOf(ChatColor.GOLD) + "=== " + String.valueOf(ChatColor.BOLD) + "Hologram Limits" + String.valueOf(ChatColor.GOLD) + " ===");
+                        player.sendMessage(slabel + String.valueOf(ChatColor.YELLOW) + "Total holograms: " + String.valueOf(ChatColor.WHITE) + totalHolograms);
+                        player.sendMessage(slabel + String.valueOf(ChatColor.AQUA) + "Temporary: " + String.valueOf(ChatColor.WHITE) + currentTemp + String.valueOf(ChatColor.GRAY) + "/" + tempLimitStatus);
+                        player.sendMessage(slabel + String.valueOf(ChatColor.GREEN) + "Persistent: " + String.valueOf(ChatColor.WHITE) + currentPersistent + String.valueOf(ChatColor.GRAY) + "/" + persistentLimitStatus);
                         break;
                     default:
                         player.sendMessage(slabel + String.valueOf(ChatColor.RED) + "Unknown command. Use /hologram help for assistance.");

@@ -4,6 +4,7 @@ import ahjd.asgHolos.AsgHolos;
 import ahjd.asgHolos.data.Config;
 import ahjd.asgHolos.data.HologramManager;
 import ahjd.asgHolos.utils.ChatInput;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Bukkit;
@@ -44,42 +45,8 @@ public class CreationGUI implements InventoryHolder {
     }
 
     private void createItems() {
-        HologramManager hologramManager = AsgHolos.getInstance().getHologramManager();
-        Config config = AsgHolos.getInstance().getPluginConfig();
-        int currentHolograms = hologramManager.getActiveHolograms();
-        Integer maxHolograms = config.getMaxHolograms();
-        boolean canCreate = maxHolograms == null || currentHolograms < maxHolograms;
-        String limitStatus = maxHolograms == null ? "§aUnlimited" : "§6" + currentHolograms + "§7/" + maxHolograms;
-        String buttonName = canCreate ? "§aCreate Hologram" : "§cCreate Hologram (Limit Reached)";
-        this.inventory.setItem(31, this.createGuiItem(Material.NETHER_STAR, buttonName, List.of(String.valueOf(ChatColor.DARK_GRAY) + "Click to spawn the hologram", "", limitStatus)));
-        ItemStack createButton;
-        ItemMeta meta;
-        if (!canCreate) {
-            createButton = this.inventory.getItem(31);
-            if (createButton != null) {
-                meta = createButton.getItemMeta();
-                if (meta != null) {
-                    meta.addItemFlags(new ItemFlag[]{ItemFlag.HIDE_ATTRIBUTES});
-                    createButton.setItemMeta(meta);
-                }
-            }
-        }
-
         this.fillGUI(this.inventory);
-        this.inventory.setItem(31, this.createGuiItem(Material.NETHER_STAR, "§aCreate Hologram", List.of(String.valueOf(ChatColor.DARK_GRAY) + "Click to spawn the hologram", "", limitStatus)));
-        if (!canCreate) {
-            createButton = this.inventory.getItem(31);
-            if (createButton != null) {
-                meta = createButton.getItemMeta();
-                if (meta != null) {
-                    meta.setDisplayName(String.valueOf(ChatColor.RED) + "§cCreate Hologram");
-                    meta.addItemFlags(new ItemFlag[]{ItemFlag.HIDE_ATTRIBUTES});
-                    createButton.setItemMeta(meta);
-                }
-            }
-        }
-
-        this.inventory.setItem(31, this.createGuiItem(Material.NETHER_STAR, "§aCreate Hologram", List.of(String.valueOf(ChatColor.DARK_GRAY) + "Click to spawn the hologram")));
+        this.updateCreateButton(true); // Default to persistent
         this.inventory.setItem(49, this.createGuiItem(Material.BARRIER, "§cCancel", List.of(String.valueOf(ChatColor.DARK_GRAY) + "Close the creation menu")));
         Inventory var10000 = this.inventory;
         Material var10003 = Material.NAME_TAG;
@@ -159,7 +126,45 @@ public class CreationGUI implements InventoryHolder {
                 item.setItemMeta(meta);
             }
         }
-
+        
+        // Update create button when persistence changes
+        this.updateCreateButton(persistent);
+    }
+    
+    public void updateCreateButton(boolean isPersistent) {
+        HologramManager hologramManager = AsgHolos.getInstance().getHologramManager();
+        Config config = AsgHolos.getInstance().getPluginConfig();
+        
+        int currentHolograms;
+        Integer maxHolograms;
+        String hologramType;
+        
+        if (isPersistent) {
+            currentHolograms = hologramManager.getActivePersistentHolograms();
+            maxHolograms = config.getMaxPersistentHolograms();
+            hologramType = "Persistent";
+        } else {
+            currentHolograms = hologramManager.getActiveTempHolograms();
+            maxHolograms = config.getMaxTempHolograms();
+            hologramType = "Temporary";
+        }
+        
+        boolean canCreate = maxHolograms == null || currentHolograms < maxHolograms;
+        String limitStatus = maxHolograms == null ? "§aUnlimited" : "§6" + currentHolograms + "§7/" + maxHolograms;
+        String buttonName = canCreate ? "§aCreate Hologram" : "§c" + hologramType + " Hologram Limit Reached";
+        
+        List<String> lore = new ArrayList<>();
+        lore.add(String.valueOf(ChatColor.DARK_GRAY) + "Click to spawn the hologram");
+        lore.add("");
+        lore.add(String.valueOf(ChatColor.GRAY) + hologramType + " Holograms: " + limitStatus);
+        
+        if (!canCreate) {
+            lore.add("");
+            lore.add(String.valueOf(ChatColor.RED) + "§c" + hologramType + " hologram limit reached!");
+            lore.add(String.valueOf(ChatColor.YELLOW) + "Use /holo limit for more info");
+        }
+        
+        this.inventory.setItem(31, this.createGuiItem(Material.NETHER_STAR, buttonName, lore));
     }
 
     public void updateSeeThroughToggle(boolean enabled) {

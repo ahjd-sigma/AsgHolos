@@ -11,6 +11,7 @@ import org.bukkit.World;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import ahjd.asgHolos.api.events.HologramCreateEvent;
 
 public class HologramMaintenanceTask {
     private final JavaPlugin plugin;
@@ -61,8 +62,22 @@ public class HologramMaintenanceTask {
             List<HologramData> savedHolograms = this.hologramManager.getSaveFile().getSavedHolograms();
             this.hologramManager.cleanCache();
             Bukkit.getScheduler().runTask(this.plugin, () -> {
+                // Log current state before maintenance
+                int currentTemp = this.hologramManager.getActiveTempHolograms();
+                int currentPersistent = this.hologramManager.getActivePersistentHolograms();
+                this.plugin.getLogger().info("Before maintenance: " + currentTemp + " temporary and " + 
+                                           currentPersistent + " persistent holograms");
+                
+                // Delete all hologram entities and reset counters
                 this.deleteAllTextDisplays();
+                
+                // Spawn only persistent holograms
                 this.spawnAllPersistentHolograms(savedHolograms);
+                
+                // Log state after maintenance
+                this.plugin.getLogger().info("After maintenance: " + 
+                                           this.hologramManager.getActiveTempHolograms() + " temporary and " + 
+                                           this.hologramManager.getActivePersistentHolograms() + " persistent holograms");
             });
         });
     }
@@ -94,7 +109,9 @@ public class HologramMaintenanceTask {
         if (totalDeleted > 0) {
             this.plugin.getLogger().info("Maintenance deleted " + totalDeleted + " total hologram entities");
         }
-
+        
+        // Reset counters to ensure accurate counting after deletion
+        this.hologramManager.resetCounters();
         this.aliveEntities.clear();
         this.pendingSpawns.clear();
     }
@@ -103,19 +120,19 @@ public class HologramMaintenanceTask {
         if (savedHolograms.isEmpty()) {
             this.plugin.getLogger().info("No persistent holograms to spawn");
         } else {
-            int currentHolograms = this.hologramManager.getActiveHolograms();
-            int maxHolograms = this.hologramManager.getConfig().getMaxHolograms();
-            int totalHolograms = currentHolograms + savedHolograms.size();
-            if (totalHolograms > maxHolograms) {
-                this.plugin.getLogger().warning("Cannot spawn all saved holograms - would exceed max limit");
-                this.plugin.getLogger().warning("Current: " + currentHolograms + ", Saved: " + savedHolograms.size() + ", Max: " + maxHolograms);
-                int hologramsToSpawn = maxHolograms - currentHolograms;
+            int currentPersistentHolograms = this.hologramManager.getActivePersistentHolograms();
+            int maxPersistentHolograms = this.hologramManager.getConfig().getMaxPersistentHolograms();
+            int totalPersistentHolograms = currentPersistentHolograms + savedHolograms.size();
+            if (totalPersistentHolograms > maxPersistentHolograms) {
+                this.plugin.getLogger().warning("Cannot spawn all saved holograms - would exceed persistent hologram limit");
+                this.plugin.getLogger().warning("Current Persistent: " + currentPersistentHolograms + ", Saved: " + savedHolograms.size() + ", Max Persistent: " + maxPersistentHolograms);
+                int hologramsToSpawn = maxPersistentHolograms - currentPersistentHolograms;
                 if (hologramsToSpawn > 0) {
                     List<HologramData> spawnable = savedHolograms.subList(0, hologramsToSpawn);
-                    this.plugin.getLogger().info("Spawning " + hologramsToSpawn + " out of " + savedHolograms.size() + " saved holograms due to max limit");
+                    this.plugin.getLogger().info("Spawning " + hologramsToSpawn + " out of " + savedHolograms.size() + " saved holograms due to persistent limit");
                     this.spawnHologramsInBatches(spawnable);
                 } else {
-                    this.plugin.getLogger().info("No holograms will be spawned due to max limit being reached");
+                    this.plugin.getLogger().info("No persistent holograms will be spawned due to limit being reached");
                 }
             } else {
                 this.plugin.getLogger().info("Spawning " + savedHolograms.size() + " persistent holograms");
@@ -143,7 +160,7 @@ public class HologramMaintenanceTask {
 
                     try {
                         HologramData tempData = new HologramData(holo.location(), holo.text(), holo.name(), holo.persistent(), holo.shadowed(), holo.seeThrough(), holo.billboard(), holo.yaw(), holo.pitch(), holo.scale(), holo.textAlignment(), holo.textOpacity(), holo.backgroundColor(), holo.viewDistance(), (UUID)null);
-                        HologramData spawnedHolo = this.hologramManager.spawnHologram(tempData);
+                        HologramData spawnedHolo = this.hologramManager.spawnHologram(tempData, null, ahjd.asgHolos.api.events.HologramCreateEvent.CreationSource.MAINTENANCE_TASK);
                         if (spawnedHolo != null) {
                             if (oldUUID != null) {
                                 this.hologramManager.getSaveFile().removeHologramByUUID(oldUUID);
