@@ -1,203 +1,200 @@
 package ahjd.asgHolos.data;
 
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-
 public class HologramMaintenanceTask {
-
     private final JavaPlugin plugin;
     private final HologramManager hologramManager;
     private BukkitTask task;
-
-    // Cache to track alive entities and avoid duplicate spawning
     private final Set<UUID> aliveEntities = ConcurrentHashMap.newKeySet();
     private final Set<UUID> pendingSpawns = ConcurrentHashMap.newKeySet();
+    private final long ticksBetweenRuns;
 
-    private static final long TICKS_BETWEEN_RUNS = 20L * 60 * 5; // 5 minutes
-
-    public HologramMaintenanceTask(JavaPlugin plugin, HologramManager hologramManager) {
+    public HologramMaintenanceTask(JavaPlugin plugin, HologramManager hologramManager, int intervalSeconds) {
         this.plugin = plugin;
         this.hologramManager = hologramManager;
+        this.ticksBetweenRuns = (long)intervalSeconds * 20L;
     }
 
     public void start() {
-        if (task != null) return; // Already running
-
-        // Initial cache population
-        populateAliveEntitiesCache();
-
-        task = Bukkit.getScheduler().runTaskTimer(plugin, this::runMaintenance, 0L, TICKS_BETWEEN_RUNS);
+        if (this.task == null) {
+            this.populateAliveEntitiesCache();
+            this.task = Bukkit.getScheduler().runTaskTimer(this.plugin, this::runMaintenance, 0L, this.ticksBetweenRuns);
+        }
     }
 
     public void stop() {
-        if (task != null) {
-            task.cancel();
-            task = null;
+        if (this.task != null) {
+            this.task.cancel();
+            this.task = null;
         }
-        aliveEntities.clear();
-        pendingSpawns.clear();
+
+        this.aliveEntities.clear();
+        this.pendingSpawns.clear();
     }
 
     private void populateAliveEntitiesCache() {
-        aliveEntities.clear();
-        for (World world : Bukkit.getWorlds()) {
-            world.getEntitiesByClass(TextDisplay.class).forEach(display ->
-                    aliveEntities.add(display.getUniqueId())
-            );
+        this.aliveEntities.clear();
+        Iterator var1 = Bukkit.getWorlds().iterator();
+
+        while(var1.hasNext()) {
+            World world = (World)var1.next();
+            world.getEntitiesByClass(TextDisplay.class).forEach((display) -> {
+                this.aliveEntities.add(display.getUniqueId());
+            });
         }
+
     }
 
     private void runMaintenance() {
-        // Run async to avoid blocking main thread
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            List<HologramData> savedHolograms = hologramManager.getSaveFile().getSavedHolograms();
-
-            if (savedHolograms.isEmpty()) return;
-            hologramManager.cleanCache();
-
-            // Collect saved UUIDs (filter out nulls)
-            Set<UUID> savedUUIDs = savedHolograms.stream()
-                    .map(HologramData::entityUUID)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-
-            // Switch back to main thread for entity operations
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                Set<UUID> currentlyAlive = scanAndCleanupEntities(savedUUIDs);
-                spawnMissingHolograms(savedHolograms, currentlyAlive);
+        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> {
+            List<HologramData> savedHolograms = this.hologramManager.getSaveFile().getSavedHolograms();
+            this.hologramManager.cleanCache();
+            Bukkit.getScheduler().runTask(this.plugin, () -> {
+                this.deleteAllTextDisplays();
+                this.spawnAllPersistentHolograms(savedHolograms);
             });
         });
     }
 
-    private Set<UUID> scanAndCleanupEntities(Set<UUID> savedUUIDs) {
-        Set<UUID> currentlyAlive = new HashSet<>();
-        int orphansRemoved = 0;
+    private void deleteAllTextDisplays() {
+        int totalDeleted = 0;
+        Iterator var2 = Bukkit.getWorlds().iterator();
 
-        for (World world : Bukkit.getWorlds()) {
-            Iterator<TextDisplay> displayIterator = world.getEntitiesByClass(TextDisplay.class).iterator();
+        while(var2.hasNext()) {
+            World world = (World)var2.next();
+            Collection<TextDisplay> displays = world.getEntitiesByClass(TextDisplay.class);
+            int worldDeleted = 0;
+            Iterator var6 = displays.iterator();
 
-            while (displayIterator.hasNext()) {
-                TextDisplay display = displayIterator.next();
-                UUID displayUUID = display.getUniqueId();
-
-                if (savedUUIDs.contains(displayUUID)) {
-                    // This is a valid hologram
-                    currentlyAlive.add(displayUUID);
-                } else {
-                    // This is an orphan - remove it
+            while(var6.hasNext()) {
+                TextDisplay display = (TextDisplay)var6.next();
+                if (display.hasMetadata("isHologram")) {
                     display.remove();
-                    orphansRemoved++;
-                    aliveEntities.remove(displayUUID);
+                    ++worldDeleted;
                 }
             }
-        }
 
-        if (orphansRemoved > 0) {
-            plugin.getLogger().info("Removed " + orphansRemoved + " orphan TextDisplay entities");
-        }
-
-        // Update cache
-        aliveEntities.retainAll(currentlyAlive);
-        aliveEntities.addAll(currentlyAlive);
-
-        return currentlyAlive;
-    }
-
-    private void spawnMissingHolograms(List<HologramData> savedHolograms, Set<UUID> currentlyAlive) {
-        List<HologramData> toSpawn = new ArrayList<>();
-
-        for (HologramData holo : savedHolograms) {
-            UUID uuid = holo.entityUUID();
-
-            // Only spawn if UUID exists but entity is not alive
-            if (uuid != null && !currentlyAlive.contains(uuid) && !pendingSpawns.contains(uuid)) {
-                toSpawn.add(holo);
+            if (worldDeleted > 0) {
+                totalDeleted += worldDeleted;
+                this.plugin.getLogger().info("Deleted " + worldDeleted + " hologram entities in world: " + world.getName());
             }
         }
 
-        if (toSpawn.isEmpty()) return;
+        if (totalDeleted > 0) {
+            this.plugin.getLogger().info("Maintenance deleted " + totalDeleted + " total hologram entities");
+        }
 
-        plugin.getLogger().info("Spawning " + toSpawn.size() + " missing holograms");
-        spawnHologramsInBatches(toSpawn);
+        this.aliveEntities.clear();
+        this.pendingSpawns.clear();
+    }
+
+    private void spawnAllPersistentHolograms(List<HologramData> savedHolograms) {
+        if (savedHolograms.isEmpty()) {
+            this.plugin.getLogger().info("No persistent holograms to spawn");
+        } else {
+            int currentHolograms = this.hologramManager.getActiveHolograms();
+            int maxHolograms = this.hologramManager.getConfig().getMaxHolograms();
+            int totalHolograms = currentHolograms + savedHolograms.size();
+            if (totalHolograms > maxHolograms) {
+                this.plugin.getLogger().warning("Cannot spawn all saved holograms - would exceed max limit");
+                this.plugin.getLogger().warning("Current: " + currentHolograms + ", Saved: " + savedHolograms.size() + ", Max: " + maxHolograms);
+                int hologramsToSpawn = maxHolograms - currentHolograms;
+                if (hologramsToSpawn > 0) {
+                    List<HologramData> spawnable = savedHolograms.subList(0, hologramsToSpawn);
+                    this.plugin.getLogger().info("Spawning " + hologramsToSpawn + " out of " + savedHolograms.size() + " saved holograms due to max limit");
+                    this.spawnHologramsInBatches(spawnable);
+                } else {
+                    this.plugin.getLogger().info("No holograms will be spawned due to max limit being reached");
+                }
+            } else {
+                this.plugin.getLogger().info("Spawning " + savedHolograms.size() + " persistent holograms");
+                this.spawnHologramsInBatches(savedHolograms);
+            }
+
+        }
     }
 
     private void spawnHologramsInBatches(List<HologramData> toSpawn) {
-        final int BATCH_SIZE = 5;
-        final int TICKS_BETWEEN_BATCHES = 2;
 
-        for (int i = 0; i < toSpawn.size(); i += BATCH_SIZE) {
-            final int startIndex = i;
-            final int endIndex = Math.min(i + BATCH_SIZE, toSpawn.size());
-            final List<HologramData> batch = toSpawn.subList(startIndex, endIndex);
-
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        for(int i = 0; i < toSpawn.size(); i += 5) {
+            int endIndex = Math.min(i + 5, toSpawn.size());
+            List<HologramData> batch = toSpawn.subList(i, endIndex);
+            Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
                 int spawned = 0;
-                for (HologramData holo : batch) {
+                Iterator var3 = batch.iterator();
+
+                while(var3.hasNext()) {
+                    HologramData holo = (HologramData)var3.next();
                     UUID oldUUID = holo.entityUUID();
                     if (oldUUID != null) {
-                        pendingSpawns.add(oldUUID);
+                        this.pendingSpawns.add(oldUUID);
                     }
 
                     try {
-                        // IMPORTANT: Don't save again during maintenance spawn!
-                        // Create non-persistent version to avoid double-saving
-                        HologramData tempData = new HologramData(
-                                holo.location(), holo.text(), false, // Set persistent to false!
-                                holo.shadowed(), holo.seeThrough(), holo.billboard(), oldUUID
-                        );
-
-                        HologramData spawnedHolo = hologramManager.spawnHologram(tempData);
+                        HologramData tempData = new HologramData(holo.location(), holo.text(), holo.name(), holo.persistent(), holo.shadowed(), holo.seeThrough(), holo.billboard(), holo.yaw(), holo.pitch(), holo.scale(), holo.textAlignment(), holo.textOpacity(), holo.backgroundColor(), holo.viewDistance(), (UUID)null);
+                        HologramData spawnedHolo = this.hologramManager.spawnHologram(tempData);
                         if (spawnedHolo != null) {
-                            // Update the saved hologram with the new UUID
-                            HologramData updatedData = new HologramData(
-                                    holo.location(), holo.text(), holo.persistent(),
-                                    holo.shadowed(), holo.seeThrough(), holo.billboard(),
-                                    spawnedHolo.entityUUID()
-                            );
-                            hologramManager.getSaveFile().removeHologramByUUID(oldUUID);
-                            hologramManager.getSaveFile().saveHologram(updatedData);
+                            if (oldUUID != null) {
+                                this.hologramManager.getSaveFile().removeHologramByUUID(oldUUID);
+                            }
 
-                            aliveEntities.add(spawnedHolo.entityUUID());
-                            spawned++;
+                            this.hologramManager.getSaveFile().saveHologram(spawnedHolo);
+                            this.aliveEntities.add(spawnedHolo.entityUUID());
+                            ++spawned;
                         }
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Failed to spawn hologram during maintenance: " + e.getMessage());
+                    } catch (Exception var11) {
+                        this.plugin.getLogger().warning("Failed to spawn hologram during maintenance: " + var11.getMessage());
                     } finally {
                         if (oldUUID != null) {
-                            pendingSpawns.remove(oldUUID);
+                            this.pendingSpawns.remove(oldUUID);
                         }
+
                     }
                 }
 
                 if (spawned > 0) {
-                    plugin.getLogger().info("Maintenance spawned " + spawned + " holograms");
+                    this.plugin.getLogger().info("Maintenance spawned " + spawned + " holograms in batch");
                 }
-            }, (long) (i / BATCH_SIZE) * TICKS_BETWEEN_BATCHES);
+
+            }, (long)(i / 5) * 2L);
         }
+
     }
 
-    // Public methods to update cache when holograms are created/removed elsewhere
+    public int getActiveHolograms() {
+        return this.hologramManager.getActiveHolograms();
+    }
+
+    public Config getConfig() {
+        return this.hologramManager.getConfig();
+    }
+
     public void onHologramSpawned(UUID entityUUID) {
         if (entityUUID != null) {
-            aliveEntities.add(entityUUID);
+            this.aliveEntities.add(entityUUID);
         }
+
     }
 
     public void onHologramRemoved(UUID entityUUID) {
         if (entityUUID != null) {
-            aliveEntities.remove(entityUUID);
+            this.aliveEntities.remove(entityUUID);
         }
+
     }
 
-    // Method to manually refresh cache if needed
     public void refreshCache() {
-        Bukkit.getScheduler().runTask(plugin, this::populateAliveEntitiesCache);
+        Bukkit.getScheduler().runTask(this.plugin, this::populateAliveEntitiesCache);
     }
 }

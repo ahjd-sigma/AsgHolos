@@ -4,56 +4,65 @@ import ahjd.asgHolos.Listeners.CreationGUIListener;
 import ahjd.asgHolos.Listeners.ListGUIListener;
 import ahjd.asgHolos.cmds.HoloCMD;
 import ahjd.asgHolos.cmds.TabCompletion;
+import ahjd.asgHolos.data.Config;
+import ahjd.asgHolos.data.HologramMaintenanceTask;
 import ahjd.asgHolos.data.HologramManager;
 import ahjd.asgHolos.data.SaveFile;
-import ahjd.asgHolos.data.HologramMaintenanceTask;
+import ahjd.asgHolos.utils.ChatInput;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class AsgHolos extends JavaPlugin {
-
+    private static AsgHolos instance;
     private SaveFile saveFile;
     private HologramManager hologramManager;
     private HologramMaintenanceTask maintenanceTask;
+    public Config config;
 
-    @Override
     public void onEnable() {
-        // Initialize components
+        instance = this;
+        this.config = new Config(this);
         this.saveFile = new SaveFile(this);
-        this.hologramManager = new HologramManager(saveFile);
-        this.maintenanceTask = new HologramMaintenanceTask(this, hologramManager);
-
-        // Set the maintenance task reference in hologram manager
-        this.hologramManager.setMaintenanceTask(maintenanceTask);
-
-        // Populate cache with existing entities
+        this.hologramManager = new HologramManager(this.saveFile, this);
+        this.maintenanceTask = new HologramMaintenanceTask(this, this.hologramManager, this.config.getMaintenanceInterval());
+        ChatInput.initialize(this);
+        this.hologramManager.setMaintenanceTask(this.maintenanceTask);
         this.hologramManager.populateCache();
-
-        hologramManager.cleanCache();
-
-        // Register events
-        getServer().getPluginManager().registerEvents(new CreationGUIListener(hologramManager), this);
-        getServer().getPluginManager().registerEvents(new ListGUIListener(hologramManager), this);
-
-        // Register commands
-        getCommand("hologram").setExecutor(new HoloCMD(hologramManager, saveFile));
-        getCommand("hologram").setTabCompleter(new TabCompletion());
-
-        // Start maintenance task
-        maintenanceTask.start();
-
-        getLogger().info("AsgHolos enabled successfully!");
+        this.hologramManager.cleanCache();
+        this.getServer().getPluginManager().registerEvents(new CreationGUIListener(this.hologramManager, this), this);
+        this.getServer().getPluginManager().registerEvents(new ListGUIListener(this.hologramManager), this);
+        this.getServer().getPluginManager().registerEvents(new ChatInput(), this);
+        this.getCommand("hologram").setExecutor(new HoloCMD(this.hologramManager, this.saveFile, this.config));
+        this.getCommand("hologram").setTabCompleter(new TabCompletion());
+        this.maintenanceTask.start();
+        this.getLogger().info("AsgHolos enabled successfully!");
     }
 
-    @Override
+    public static AsgHolos getInstance() {
+        return instance;
+    }
+
+    public HologramManager getHologramManager() {
+        return this.hologramManager;
+    }
+
+    public Config getPluginConfig() {
+        return this.config;
+    }
+
     public void onDisable() {
-        if (maintenanceTask != null) {
-            maintenanceTask.stop();
+        if (this.maintenanceTask != null) {
+            this.maintenanceTask.stop();
         }
 
-        // Clean up cache
-        if (hologramManager != null) {
-            hologramManager.getEntityCache().clear();
+        if (this.config != null) {
+            this.config.reloadConfig();
         }
-        getLogger().info("AsgHolos disabled successfully!");
+
+        if (this.hologramManager != null) {
+            this.hologramManager.getEntityCache().clear();
+        }
+
+        ChatInput.cleanup();
+        this.getLogger().info("AsgHolos disabled successfully!");
     }
 }

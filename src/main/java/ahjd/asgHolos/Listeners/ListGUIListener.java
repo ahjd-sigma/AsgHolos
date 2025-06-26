@@ -4,17 +4,19 @@ import ahjd.asgHolos.data.HologramData;
 import ahjd.asgHolos.data.HologramManager;
 import ahjd.asgHolos.data.SaveFile;
 import ahjd.asgHolos.guis.ListGUI;
+import java.util.List;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-
-import java.util.List;
 
 public class ListGUIListener implements Listener {
     private final HologramManager hologramManager;
@@ -25,60 +27,72 @@ public class ListGUIListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) return;
-        if (!(event.getInventory().getHolder() instanceof ListGUI gui)) return;
-        String slabel = ChatColor.DARK_GRAY + "[" + ChatColor.YELLOW + "🔥 " + ChatColor.GOLD + "Sigma" + ChatColor.DARK_GRAY + "] ";
+        HumanEntity var3;
+        if ((var3 = event.getWhoClicked()) instanceof Player) {
+            Player player = (Player)var3;
+            InventoryHolder var5;
+            if ((var5 = event.getInventory().getHolder()) instanceof ListGUI) {
+                ListGUI gui = (ListGUI)var5;
+                String var10000 = String.valueOf(ChatColor.DARK_GRAY);
+                String slabel = var10000 + "[" + String.valueOf(ChatColor.YELLOW) + "\ud83d\udd25 " + String.valueOf(ChatColor.GOLD) + "Sigma" + String.valueOf(ChatColor.DARK_GRAY) + "] ";
+                event.setCancelled(true);
+                int slot = event.getRawSlot();
+                ItemStack clicked = event.getCurrentItem();
+                if (clicked != null && clicked.hasItemMeta()) {
+                    SaveFile saveFile = gui.getSaveFile();
+                    int currentPage = gui.getPage();
+                    boolean isShowingTemp = gui.isShowingTemporary();
+                    if (slot == 47) {
+                        boolean currentMode = ListGUI.isShowingTemporary(player);
+                        ListGUI.setShowingTemporary(player, !currentMode);
+                        (new ListGUI(saveFile, this.hologramManager, 0, !currentMode)).open(player);
+                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.2F);
+                    } else if (slot == 51 && isShowingTemp) {
+                        (new ListGUI(saveFile, this.hologramManager, gui.getPage(), true)).open(player);
+                        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0F, 1.5F);
+                        player.sendMessage(slabel + String.valueOf(ChatColor.GREEN) + "Refreshed temporary hologram list!");
+                    } else if (slot == 45 && clicked.getType() == Material.ARROW) {
+                        (new ListGUI(saveFile, this.hologramManager, currentPage - 1, isShowingTemp)).open(player);
+                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.1F);
+                    } else if (slot == 53 && clicked.getType() == Material.ARROW) {
+                        (new ListGUI(saveFile, this.hologramManager, currentPage + 1, isShowingTemp)).open(player);
+                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 1.1F);
+                    } else if (slot == 49 && clicked.getType() == Material.BARRIER) {
+                        player.closeInventory();
+                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0F, 0.8F);
+                    } else {
+                        List<HologramData> currentHolograms = gui.getHolograms();
+                        int index = currentPage * 45 + slot;
+                        if (index < currentHolograms.size() && slot < 45) {
+                            HologramData target = (HologramData)currentHolograms.get(index);
+                            String holoType;
+                            if (event.getClick() == ClickType.LEFT) {
+                                Location tpLoc = target.location();
+                                if (tpLoc.getWorld() != null) {
+                                    player.teleport(tpLoc);
+                                    holoType = isShowingTemp ? "temporary hologram" : "hologram";
+                                    player.sendMessage(slabel + String.valueOf(ChatColor.GREEN) + "Teleported to " + holoType + ": §f" + target.text());
+                                    player.playSound(tpLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0F, 1.0F);
+                                } else {
+                                    player.sendMessage(slabel + String.valueOf(ChatColor.RED) + "Hologram world not found!");
+                                }
+                            } else if (event.getClick() == ClickType.RIGHT) {
+                                boolean deleted = this.hologramManager.deleteHologram(target);
+                                if (deleted) {
+                                    (new ListGUI(saveFile, this.hologramManager, currentPage, isShowingTemp)).open(player);
+                                    holoType = isShowingTemp ? "temporary hologram" : "hologram";
+                                    player.sendMessage(slabel + String.valueOf(ChatColor.RED) + "Deleted " + holoType + ": §f" + target.displayName());
+                                    player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0F, 0.8F);
+                                } else {
+                                    player.sendMessage(slabel + String.valueOf(ChatColor.RED) + "Failed to delete hologram!");
+                                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0F, 1.0F);
+                                }
+                            }
 
-        event.setCancelled(true);
-        int slot = event.getRawSlot();
-        ItemStack clicked = event.getCurrentItem();
-        if (clicked == null || !clicked.hasItemMeta()) return;
-
-        SaveFile saveFile = gui.getSaveFile();
-        int currentPage = gui.getPage();
-
-        // Navigation: Previous / Next / Exit
-        if (slot == 45 && clicked.getType() == org.bukkit.Material.ARROW) {
-            new ListGUI(saveFile, currentPage - 1).open(player);
-            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1.1f);
-            return;
-        }
-        if (slot == 53 && clicked.getType() == org.bukkit.Material.ARROW) {
-            new ListGUI(saveFile, currentPage + 1).open(player);
-            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1.1f);
-            return;
-        }
-        if (slot == 49 && clicked.getType() == org.bukkit.Material.BARRIER) {
-            player.closeInventory();
-            return;
-        }
-
-        // Hologram actions
-        List<HologramData> all = saveFile.getSavedHolograms();
-        int index = currentPage * 45 + slot;
-        if (index >= all.size()) return;
-
-        HologramData target = all.get(index);
-
-        if (event.getClick() == ClickType.LEFT) {
-
-            // Teleport
-            Location tpLoc = target.location();
-            if (tpLoc.getWorld() != null) {
-
-                player.teleport(tpLoc);
-                player.sendMessage(slabel + ChatColor.GREEN + "§aTeleported to hologram: §f" + target.text());
-                player.playSound(tpLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1, 1);
-
-            } else {
-                player.sendMessage(slabel + ChatColor.RED + "§cHologram world not found!");
+                        }
+                    }
+                }
             }
-
-        } else if (event.getClick() == ClickType.RIGHT) {
-            hologramManager.deleteHologram(target);
-            new ListGUI(hologramManager.getSaveFile(), currentPage).open(player);
-            player.sendMessage(slabel + ChatColor.RED + "§cDeleted hologram: §f" + target.text());
-            player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1, 0.8f);
         }
     }
 }

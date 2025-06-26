@@ -1,0 +1,8 @@
+# AsgHolos Configuration File
+
+# Maximum number of holograms allowed to be active at once
+# Set to null for unlimited holograms
+max_holograms: 100
+
+# Maintenance task interval in seconds (how often to check for expired holograms)
+maintenance_interval: 60
